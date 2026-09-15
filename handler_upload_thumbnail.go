@@ -1,6 +1,8 @@
 package main
 
 import (
+	"crypto/rand"
+	"encoding/base64"
 	"fmt"
 	"io"
 	"log"
@@ -82,7 +84,14 @@ func (cfg *apiConfig) handlerUploadThumbnail(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	path := filepath.Join(cfg.assetsRoot, videoIDString+"."+ext)
+	oldVideoFile := *video.ThumbnailURL
+
+	key := make([]byte, 32)
+	rand.Read(key)
+
+	thumbName := base64.RawURLEncoding.EncodeToString(key)
+
+	path := filepath.Join(cfg.assetsRoot, thumbName+"."+ext)
 	thumbFile, err := os.Create(path)
 	if err != nil {
 		respondWithError(w, http.StatusInternalServerError, "Couldn't create thumbnail file", err)
@@ -102,7 +111,7 @@ func (cfg *apiConfig) handlerUploadThumbnail(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	thumbUrl := fmt.Sprintf("http://localhost:%s/assets/%s.%s", cfg.port, videoIDString, ext)
+	thumbUrl := fmt.Sprintf("http://localhost:%s/assets/%s.%s", cfg.port, thumbName, ext)
 
 	video.ThumbnailURL = &thumbUrl
 	video.UpdatedAt = time.Now()
@@ -111,6 +120,16 @@ func (cfg *apiConfig) handlerUploadThumbnail(w http.ResponseWriter, r *http.Requ
 	if err != nil {
 		respondWithError(w, http.StatusInternalServerError, "Couldn't update video", err)
 		return
+	}
+
+	if oldVideoFile != "" {
+		oldVideoFile = strings.TrimPrefix(oldVideoFile, "http://localhost:"+cfg.port+"/")
+
+		err = os.Remove("./" + oldVideoFile)
+		if err != nil {
+			log.Printf("Error removing old video file: %s", err)
+			return
+		}
 	}
 
 	respondWithJSON(w, http.StatusOK, video)
