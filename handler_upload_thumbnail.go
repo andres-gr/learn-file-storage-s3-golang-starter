@@ -1,17 +1,18 @@
 package main
 
 import (
-	"encoding/base64"
 	"fmt"
 	"io"
 	"log"
 	"net/http"
+	"os"
+	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
 
 	"github.com/bootdotdev/learn-file-storage-s3-golang-starter/internal/auth"
-	"github.com/bootdotdev/learn-file-storage-s3-golang-starter/internal/database"
 )
 
 func (cfg *apiConfig) handlerUploadThumbnail(w http.ResponseWriter, r *http.Request) {
@@ -56,12 +57,7 @@ func (cfg *apiConfig) handlerUploadThumbnail(w http.ResponseWriter, r *http.Requ
 	}()
 
 	media := thumbHead.Header.Get("Content-Type")
-
-	data, err := io.ReadAll(thumb)
-	if err != nil {
-		respondWithError(w, http.StatusBadRequest, "Couldn't read thumbnail", err)
-		return
-	}
+	ext := strings.Split(media, "/")[1]
 
 	video, err := cfg.db.GetVideo(videoID)
 	if err != nil {
@@ -74,33 +70,36 @@ func (cfg *apiConfig) handlerUploadThumbnail(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	url := base64.StdEncoding.EncodeToString(data)
-	thumbUrl := fmt.Sprintf("data:%s;base64,%s", media, url)
+	path := filepath.Join(cfg.assetsRoot, videoIDString+"."+ext)
+	thumbFile, err := os.Create(path)
+	if err != nil {
+		respondWithError(w, http.StatusInternalServerError, "Couldn't create thumbnail file", err)
+		return
+	}
 
-	err = cfg.db.UpdateVideo(database.Video{
-		ID:           video.ID,
-		ThumbnailURL: &thumbUrl,
-		VideoURL:     video.VideoURL,
-		UpdatedAt:    time.Now(),
-		CreateVideoParams: database.CreateVideoParams{
-			Title:       video.Title,
-			Description: video.Description,
-			UserID:      video.UserID,
-		},
-	})
+	defer func() {
+		if err := thumbFile.Close(); err != nil {
+			log.Printf("Error closing file: %s", err)
+			return
+		}
+	}()
+
+	_, err = io.Copy(thumbFile, thumb)
+	if err != nil {
+		respondWithError(w, http.StatusInternalServerError, "Couldn't copy thumbnail", err)
+		return
+	}
+
+	thumbUrl := fmt.Sprintf("http://localhost:%s/assets/%s.%s", cfg.port, videoIDString, ext)
+
+	video.ThumbnailURL = &thumbUrl
+	video.UpdatedAt = time.Now()
+
+	err = cfg.db.UpdateVideo(video)
 	if err != nil {
 		respondWithError(w, http.StatusInternalServerError, "Couldn't update video", err)
 		return
 	}
 
-	respondWithJSON(w, http.StatusOK, database.Video{
-		ID:           videoID,
-		ThumbnailURL: &thumbUrl,
-		VideoURL:     video.VideoURL,
-		CreateVideoParams: database.CreateVideoParams{
-			Title:       video.Title,
-			Description: video.Description,
-			UserID:      video.UserID,
-		},
-	})
+	respondWithJSON(w, http.StatusOK, video)
 }
