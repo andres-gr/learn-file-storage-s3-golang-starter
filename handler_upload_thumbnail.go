@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"mime"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -57,6 +58,17 @@ func (cfg *apiConfig) handlerUploadThumbnail(w http.ResponseWriter, r *http.Requ
 	}()
 
 	media := thumbHead.Header.Get("Content-Type")
+	medType, _, err := mime.ParseMediaType(media)
+	if err != nil {
+		respondWithError(w, http.StatusBadRequest, "Invalid media type", err)
+		return
+	}
+
+	if medType != "image/jpeg" && medType != "image/png" {
+		respondWithError(w, http.StatusBadRequest, "Invalid media type", err)
+		return
+	}
+
 	ext := strings.Split(media, "/")[1]
 
 	video, err := cfg.db.GetVideo(videoID)
