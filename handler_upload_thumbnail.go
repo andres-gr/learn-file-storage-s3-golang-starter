@@ -38,6 +38,17 @@ func (cfg *apiConfig) handlerUploadThumbnail(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
+	video, err := cfg.db.GetVideo(videoID)
+	if err != nil {
+		respondWithError(w, http.StatusNotFound, "Couldn't get video", err)
+		return
+	}
+
+	if video.UserID != userID {
+		respondWithError(w, http.StatusUnauthorized, "You can't upload a thumbnail to this video", err)
+		return
+	}
+
 	fmt.Println("uploading thumbnail for video", videoID, "by user", userID)
 
 	const maxMem = 10 << 20
@@ -72,17 +83,6 @@ func (cfg *apiConfig) handlerUploadThumbnail(w http.ResponseWriter, r *http.Requ
 	}
 
 	ext := strings.Split(media, "/")[1]
-
-	video, err := cfg.db.GetVideo(videoID)
-	if err != nil {
-		respondWithError(w, http.StatusNotFound, "Couldn't get video", err)
-		return
-	}
-
-	if video.UserID != userID {
-		respondWithError(w, http.StatusUnauthorized, "You can't upload a thumbnail to this video", err)
-		return
-	}
 
 	oldVideoFile := *video.ThumbnailURL
 
