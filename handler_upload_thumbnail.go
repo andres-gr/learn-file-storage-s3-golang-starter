@@ -84,7 +84,10 @@ func (cfg *apiConfig) handlerUploadThumbnail(w http.ResponseWriter, r *http.Requ
 
 	ext := strings.Split(media, "/")[1]
 
-	oldVideoFile := *video.ThumbnailURL
+	var oldVideoFile string
+	if video.ThumbnailURL != nil {
+		oldVideoFile = *video.ThumbnailURL
+	}
 
 	key := make([]byte, 32)
 	rand.Read(key)
