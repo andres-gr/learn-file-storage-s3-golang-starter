@@ -137,10 +137,36 @@ func (cfg *apiConfig) handlerUploadVideo(w http.ResponseWriter, r *http.Request)
 
 	videoName := base64.RawURLEncoding.EncodeToString(key)
 
+	vidPath, err := processVideoForFastStart(temp.Name())
+	if err != nil {
+		respondWithError(w, http.StatusInternalServerError, "Couldn't process video", err)
+		return
+	}
+
+	res, err := os.Open(vidPath)
+	if err != nil {
+		respondWithError(w, http.StatusInternalServerError, "Couldn't open temp file", err)
+		return
+	}
+
+	defer func() {
+		if err := os.Remove(res.Name()); err != nil {
+			log.Printf("Error removing temp file: %s", err)
+			return
+		}
+	}()
+
+	defer func() {
+		if err := res.Close(); err != nil {
+			log.Printf("Error closing file: %s", err)
+			return
+		}
+	}()
+
 	_, err = cfg.s3Client.PutObject(r.Context(), &s3.PutObjectInput{
 		Bucket:      aws.String(cfg.s3Bucket),
 		Key:         aws.String(aspect + "/" + videoName + "." + ext),
-		Body:        temp,
+		Body:        res,
 		ContentType: aws.String(medType),
 	})
 	if err != nil {

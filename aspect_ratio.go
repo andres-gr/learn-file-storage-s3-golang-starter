@@ -21,16 +21,16 @@ const (
 	cmdProbe        = "ffprobe"
 )
 
-var args = [5]string{
-	"-v",
-	"error",
-	"-print_format",
-	"json",
-	"-show_streams",
-}
-
 func getVideoAspectRatio(path string) (aspect string, err error) {
-	cmd := exec.Command(cmdProbe, append(args[:], path)...)
+	args := [6]string{
+		"-v",
+		"error",
+		"-print_format",
+		"json",
+		"-show_streams",
+		path,
+	}
+	cmd := exec.Command(cmdProbe, args[:]...)
 
 	var out bytes.Buffer
 
