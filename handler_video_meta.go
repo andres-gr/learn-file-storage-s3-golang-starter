@@ -4,9 +4,10 @@ import (
 	"encoding/json"
 	"net/http"
 
+	"github.com/google/uuid"
+
 	"github.com/bootdotdev/learn-file-storage-s3-golang-starter/internal/auth"
 	"github.com/bootdotdev/learn-file-storage-s3-golang-starter/internal/database"
-	"github.com/google/uuid"
 )
 
 func (cfg *apiConfig) handlerVideoMetaCreate(w http.ResponseWriter, r *http.Request) {
@@ -95,7 +96,18 @@ func (cfg *apiConfig) handlerVideoGet(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	respondWithJSON(w, http.StatusOK, video)
+	if video.VideoURL == nil {
+		respondWithJSON(w, http.StatusOK, video)
+		return
+	}
+
+	signedVid, err := cfg.dbVideoToSignedVideo(video)
+	if err != nil {
+		respondWithError(w, http.StatusInternalServerError, "Couldn't convert video to signed url", err)
+		return
+	}
+
+	respondWithJSON(w, http.StatusOK, signedVid)
 }
 
 func (cfg *apiConfig) handlerVideosRetrieve(w http.ResponseWriter, r *http.Request) {
@@ -114,6 +126,24 @@ func (cfg *apiConfig) handlerVideosRetrieve(w http.ResponseWriter, r *http.Reque
 	if err != nil {
 		respondWithError(w, http.StatusInternalServerError, "Couldn't retrieve videos", err)
 		return
+	}
+
+	if len(videos) == 0 {
+		respondWithJSON(w, http.StatusOK, videos)
+		return
+	}
+
+	for i := range videos {
+		if videos[i].VideoURL == nil {
+			continue
+		}
+
+		signedVid, err := cfg.dbVideoToSignedVideo(videos[i])
+		if err != nil {
+			respondWithError(w, http.StatusInternalServerError, "Couldn't convert video to signed url", err)
+			return
+		}
+		videos[i] = signedVid
 	}
 
 	respondWithJSON(w, http.StatusOK, videos)
